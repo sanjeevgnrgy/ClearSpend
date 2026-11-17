@@ -1,6 +1,8 @@
+'use client';
+
 import { useState, useRef, useEffect, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, X, Send, RotateCcw, Check } from 'lucide-react';
+import { Sparkles, X, Send, RotateCcw, Check, Mic, Square } from 'lucide-react';
 
 export interface AgentToolCall {
   id?: string;
@@ -79,9 +81,14 @@ export function AgentChatDrawer({
   const [geminiHistory, setGeminiHistory] = useState<GeminiContent[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
 
   const scrollEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -97,6 +104,81 @@ export function AgentChatDrawer({
     setMessages([INITIAL_WELCOME]);
     setGeminiHistory([]);
     setInput('');
+    setVoiceError(null);
+  }
+
+  async function toggleVoiceRecording() {
+    setVoiceError(null);
+    if (isRecording && mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setVoiceError('Microphone recording is not supported in this browser.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/mp4';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (ev) => {
+        if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        if (audioBlob.size === 0) return;
+
+        setIsTranscribing(true);
+        try {
+          const reader = new FileReader();
+          const base64: string = await new Promise((resolve, reject) => {
+            reader.onloadend = () => {
+              const result = String(reader.result ?? '');
+              resolve(result.split(',')[1] ?? '');
+            };
+            reader.onerror = () => reject(new Error('Failed to read audio.'));
+            reader.readAsDataURL(audioBlob);
+          });
+
+          const res = await fetch('/api/voice/transcribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audioBase64: base64, mimeType }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data?.error || 'Transcription failed.');
+          }
+          const transcript = String(data.transcript ?? '').trim();
+          if (transcript) {
+            void sendMessage(transcript);
+          } else {
+            setVoiceError('No speech detected. Try speaking closer to the mic.');
+          }
+        } catch (err: unknown) {
+          setVoiceError(
+            err instanceof Error ? err.message : 'Unable to transcribe voice note.'
+          );
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setIsRecording(true);
+    } catch {
+      setVoiceError('Microphone access was denied.');
+    }
   }
 
   async function sendMessage(textToSend: string) {
@@ -366,32 +448,66 @@ export function AgentChatDrawer({
             </div>
 
             {/* Composer */}
-            <form
-              onSubmit={handleFormSubmit}
-              className="p-4 bg-white border-t border-zinc-200 flex items-center gap-2 shrink-0"
-            >
-              <label htmlFor="agent-drawer-input" className="sr-only">
-                Ask Clearspend Agent
-              </label>
-              <input
-                ref={inputRef}
-                id="agent-drawer-input"
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                disabled={isLoading}
-                placeholder="Split a bill, log spend, or ask a question..."
-                className="flex-1 h-11 px-3.5 text-sm bg-[#FAFAFA] border border-zinc-200 rounded-lg text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-emerald-700 disabled:opacity-60"
-              />
-              <button
-                type="submit"
-                disabled={isLoading || input.trim().length === 0}
-                aria-label="Send message"
-                className="h-11 w-11 inline-flex items-center justify-center bg-zinc-900 hover:bg-emerald-800 disabled:opacity-40 text-white rounded-lg transition-colors shrink-0 cursor-pointer"
+            <div className="bg-white border-t border-zinc-200 shrink-0">
+              {voiceError && (
+                <p role="alert" className="px-4 pt-2 text-xs font-medium text-red-700">
+                  {voiceError}
+                </p>
+              )}
+              {isTranscribing && (
+                <p className="px-4 pt-2 text-xs font-mono text-emerald-800">
+                  Transcribing voice command via Gemini...
+                </p>
+              )}
+              <form
+                onSubmit={handleFormSubmit}
+                className="p-4 flex items-center gap-2"
               >
-                <Send className="w-4 h-4" aria-hidden="true" />
-              </button>
-            </form>
+                <label htmlFor="agent-drawer-input" className="sr-only">
+                  Ask Clearspend Agent
+                </label>
+                <input
+                  ref={inputRef}
+                  id="agent-drawer-input"
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  disabled={isLoading || isTranscribing}
+                  placeholder={
+                    isRecording
+                      ? 'Listening... click stop when done'
+                      : 'Split a bill, log spend, or ask a question...'
+                  }
+                  className="flex-1 h-11 px-3.5 text-sm bg-[#FAFAFA] border border-zinc-200 rounded-lg text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-emerald-700 disabled:opacity-60"
+                />
+                <button
+                  type="button"
+                  onClick={() => void toggleVoiceRecording()}
+                  disabled={isLoading || isTranscribing}
+                  aria-label={isRecording ? 'Stop voice recording' : 'Record voice command'}
+                  title={isRecording ? 'Stop recording' : 'Speak command'}
+                  className={`h-11 w-11 inline-flex items-center justify-center rounded-lg border transition-colors shrink-0 cursor-pointer disabled:opacity-40 ${
+                    isRecording
+                      ? 'bg-red-700 border-red-700 text-white'
+                      : 'bg-white border-zinc-200 text-zinc-700 hover:border-zinc-400 hover:text-zinc-950'
+                  }`}
+                >
+                  {isRecording ? (
+                    <Square className="w-4 h-4" aria-hidden="true" />
+                  ) : (
+                    <Mic className="w-4 h-4" aria-hidden="true" />
+                  )}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading || isTranscribing || input.trim().length === 0}
+                  aria-label="Send message"
+                  className="h-11 w-11 inline-flex items-center justify-center bg-zinc-900 hover:bg-emerald-800 disabled:opacity-40 text-white rounded-lg transition-colors shrink-0 cursor-pointer"
+                >
+                  <Send className="w-4 h-4" aria-hidden="true" />
+                </button>
+              </form>
+            </div>
           </motion.aside>
         </div>
       )}

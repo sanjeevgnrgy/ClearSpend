@@ -1,0 +1,206 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public non-PII profile for an authenticated Clearspend user.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "initials": { "type": "string", "minLength": 1, "maxLength": 4 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "initials", "createdAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Private user settings and PII isolated under the user's private subcollection.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "monthlyBudgetCap": { "type": "number" },
+        "checkingBuffer": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "monthlyBudgetCap", "checkingBuffer", "updatedAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Personal expense ledger entry owned by a single user.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "merchant": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "category": { "type": "string", "enum": ["Dining", "Software", "Travel", "Groceries", "Utilities", "Housing"] },
+        "date": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "amount": { "type": "number" },
+        "note": { "type": "string", "minLength": 0, "maxLength": 240 },
+        "source": { "type": "string", "enum": ["Manual", "Receipt OCR", "Agentic Rule", "Bank Feed", "Group Split", "CSV Import", "Voice"] },
+        "groupId": { "type": "string", "minLength": 0, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "merchant", "category", "date", "amount", "note", "source", "createdAt"]
+    },
+    "AutomationRule": {
+      "title": "AutomationRule",
+      "description": "Smart automation rule owned by a single user.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "conditionText": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "actionText": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "matchesThisMonth": { "type": "number" },
+        "enabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "name", "conditionText", "actionText", "matchesThisMonth", "enabled", "createdAt", "updatedAt"]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "Recurring SaaS subscription tracked by a user.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "vendor": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "cadence": { "type": "string", "enum": ["Monthly", "Annual"] },
+        "nextBillDate": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "monthlyCost": { "type": "number" },
+        "previousCost": { "type": "number" },
+        "status": { "type": "string", "enum": ["Active", "Price Increased", "Paused"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "vendor", "cadence", "nextBillDate", "monthlyCost", "status", "updatedAt"]
+    },
+    "ReceiptDoc": {
+      "title": "ReceiptDoc",
+      "description": "Parsed receipt metadata and line items stored for a user.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "merchant": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "date": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "subtotal": { "type": "number" },
+        "tax": { "type": "number" },
+        "tip": { "type": "number" },
+        "total": { "type": "number" },
+        "category": { "type": "string", "enum": ["Dining", "Software", "Travel", "Groceries", "Utilities", "Housing"] },
+        "paymentMethod": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "items": { "type": "array" },
+        "assignedTarget": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "merchant", "date", "subtotal", "tax", "tip", "total", "category", "paymentMethod", "items", "assignedTarget", "createdAt"]
+    },
+    "SplitGroup": {
+      "title": "SplitGroup",
+      "description": "Shared Splitwise-style group owned by a user with bounded participant UIDs.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberUids": { "type": "array" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "description": { "type": "string", "minLength": 0, "maxLength": 240 },
+        "currency": { "type": "string", "minLength": 3, "maxLength": 6 },
+        "fairnessLabel": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "shareId": { "type": "string", "minLength": 0, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "memberUids", "name", "description", "currency", "fairnessLabel", "createdAt", "updatedAt"]
+    },
+    "GroupMemberDoc": {
+      "title": "GroupMemberDoc",
+      "description": "Member entry inside a SplitGroup.",
+      "type": "object",
+      "properties": {
+        "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "initials": { "type": "string", "minLength": 1, "maxLength": 4 },
+        "defaultWeight": { "type": "number" },
+        "isSelf": { "type": "boolean" }
+      },
+      "required": ["groupId", "name", "initials", "defaultWeight", "isSelf"]
+    },
+    "SharedExpenseDoc": {
+      "title": "SharedExpenseDoc",
+      "description": "Shared bill or settlement inside a SplitGroup.",
+      "type": "object",
+      "properties": {
+        "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "category": { "type": "string", "enum": ["Dining", "Software", "Travel", "Groceries", "Utilities", "Housing"] },
+        "totalAmount": { "type": "number" },
+        "paidByMemberId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "splitMethod": { "type": "string", "enum": ["equal", "exact", "percentage", "shares", "itemized"] },
+        "allocations": { "type": "object" },
+        "date": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "isSettlement": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["groupId", "createdByUid", "title", "category", "totalAmount", "paidByMemberId", "splitMethod", "allocations", "date", "isSettlement", "createdAt"]
+    },
+    "PublicShareSnapshot": {
+      "title": "PublicShareSnapshot",
+      "description": "Sanitized read-only settlement summary accessible via unguessable shareId without login.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "description": { "type": "string", "minLength": 0, "maxLength": 240 },
+        "currency": { "type": "string", "minLength": 3, "maxLength": 6 },
+        "totalGroupSpend": { "type": "number" },
+        "transfers": { "type": "array" },
+        "expenses": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "groupId", "groupName", "description", "currency", "totalGroupSpend", "transfers", "expenses", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Non-PII profile document for a signed-in user."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Private user settings and email isolated from other users."
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Personal expense transactions owned by userId."
+    },
+    "/users/{userId}/rules/{ruleId}": {
+      "schema": { "$ref": "#/entities/AutomationRule" },
+      "description": "Automation rules owned by userId."
+    },
+    "/users/{userId}/subscriptions/{subId}": {
+      "schema": { "$ref": "#/entities/Subscription" },
+      "description": "Recurring subscriptions monitored by userId."
+    },
+    "/users/{userId}/receipts/{receiptId}": {
+      "schema": { "$ref": "#/entities/ReceiptDoc" },
+      "description": "Captured receipts and extracted line items owned by userId."
+    },
+    "/groups/{groupId}": {
+      "schema": { "$ref": "#/entities/SplitGroup" },
+      "description": "Shared Splitwise-style group accessible to ownerId and memberUids."
+    },
+    "/groups/{groupId}/members/{memberId}": {
+      "schema": { "$ref": "#/entities/GroupMemberDoc" },
+      "description": "Participants inside a SplitGroup."
+    },
+    "/groups/{groupId}/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/SharedExpenseDoc" },
+      "description": "Shared expenses and settlements inside a SplitGroup."
+    },
+    "/publicShares/{shareId}": {
+      "schema": { "$ref": "#/entities/PublicShareSnapshot" },
+      "description": "Sanitized no-login settlement link snapshots."
+    }
+  }
+}

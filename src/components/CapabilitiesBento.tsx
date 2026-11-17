@@ -1,12 +1,14 @@
+'use client';
+
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Check, ScanLine, ArrowRight, Sparkles } from 'lucide-react';
 import {
   RECEIPT_SAMPLES,
   MONTHLY_CHART_SERIES,
-} from '../data/expenseData';
+} from '@/data/expenseData';
 import { ResilientImage } from './ResilientImage';
-import { AppPage } from '../types/clearspend';
+import { AppPage } from '@/types/clearspend';
 
 interface CapabilitiesBentoProps {
   onOpenWorkspace: (page: AppPage) => void;
@@ -133,7 +135,7 @@ export function CapabilitiesBento({ onOpenWorkspace }: CapabilitiesBentoProps) {
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
               <div className="md:col-span-5 relative overflow-hidden rounded-lg border border-zinc-200/80 min-h-[210px]">
                 <ResilientImage
-                  src="/src/assets/images/editorial_workspace_receipt_1794898286805.jpg"
+                  src="/images/editorial_workspace_receipt_1794898286805.jpg"
                   alt="Minimalist oak desk with smartphone and printed coffee receipt"
                   fallbackTitle="Receipt capture workspace"
                   className="w-full h-full object-cover"

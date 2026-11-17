@@ -1,14 +1,26 @@
+'use client';
+
 import { useState } from 'react';
 import { motion } from 'motion/react';
+import { SlidersHorizontal } from 'lucide-react';
 import {
   ANALYTICS_MONTHLY_SERIES,
   CATEGORY_BUDGETS,
-} from '../../data/initialWorkspaceData';
-import { LedgerTransaction, SubscriptionItem } from '../../types/clearspend';
+} from '@/data/initialWorkspaceData';
+import {
+  LedgerTransaction,
+  RecurringGroupBill,
+  SubscriptionItem,
+} from '@/types/clearspend';
 
 interface AnalyticsPageProps {
   transactions: LedgerTransaction[];
   subscriptions: SubscriptionItem[];
+  recurringBills: RecurringGroupBill[];
+  checkingBuffer: number;
+  netYouAreOwed: number;
+  netYouOwe: number;
+  onChangeCheckingBuffer: (val: number) => void;
   onToggleSubscriptionStatus: (id: string) => void;
 }
 
@@ -18,10 +30,20 @@ type SeriesKey = keyof typeof ANALYTICS_MONTHLY_SERIES;
 export function AnalyticsPage({
   transactions,
   subscriptions,
+  recurringBills,
+  checkingBuffer,
+  netYouAreOwed,
+  netYouOwe,
+  onChangeCheckingBuffer,
   onToggleSubscriptionStatus,
 }: AnalyticsPageProps) {
   const [chartTab, setChartTab] = useState<SeriesKey>('Spending');
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  // Interactive "What-If" Affordability & Runway Simulator state
+  const [plannedPurchase, setPlannedPurchase] = useState(450);
+  const [diningTrimPct, setDiningTrimPct] = useState(15);
+  const [collectGroupOwed, setCollectGroupOwed] = useState(true);
 
   const series = ANALYTICS_MONTHLY_SERIES[chartTab];
   const maxVal = Math.max(...series.map((s) => s.value));
@@ -30,8 +52,185 @@ export function AnalyticsPage({
     .filter((s) => s.status !== 'Paused')
     .reduce((sum, s) => sum + s.monthlyCost, 0);
 
+  const pausedSavingsMonthly = subscriptions
+    .filter((s) => s.status === 'Paused')
+    .reduce((sum, s) => sum + s.monthlyCost, 0);
+
+  const currentDiningSpend = transactions
+    .filter((t) => t.category === 'Dining')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const activeGroupRecurring = recurringBills
+    .filter((b) => b.active)
+    .reduce((sum, b) => sum + b.amount, 0);
+
+  const diningSavingsPerMonth = Math.round(((currentDiningSpend * diningTrimPct) / 100) * 100) / 100;
+  const startingLiquid =
+    checkingBuffer + (collectGroupOwed ? netYouAreOwed : 0) - netYouOwe;
+  const simulated90DayBuffer =
+    startingLiquid -
+    plannedPurchase -
+    activeGroupRecurring +
+    (diningSavingsPerMonth + pausedSavingsMonthly) * 3;
+  const safeDailyAllowance = Math.max(simulated90DayBuffer / 30, 0);
+
+  const verdictLabel =
+    simulated90DayBuffer >= 400
+      ? 'Safe Buffer'
+      : simulated90DayBuffer >= 0
+      ? 'Tight Collision Risk'
+      : 'Deficit — Collect Splits or Defer Purchase';
+
+  const verdictColor =
+    simulated90DayBuffer >= 400
+      ? 'text-emerald-800'
+      : simulated90DayBuffer >= 0
+      ? 'text-amber-700'
+      : 'text-red-700';
+
   return (
     <div className="space-y-8">
+      {/* Interactive "What-If" Affordability & Runway Simulator */}
+      <section className="bg-white border border-zinc-200 rounded-xl p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-zinc-100">
+          <div className="flex items-center gap-2.5">
+            <SlidersHorizontal className="w-4 h-4 text-emerald-700" aria-hidden="true" />
+            <div>
+              <h2 className="font-display text-lg font-semibold text-zinc-950">
+                What-If Affordability & Cash-Flow Simulator
+              </h2>
+              <p className="text-xs text-zinc-500">
+                Stress-test upcoming purchases, dining trims, and group settlements against rent and recurring bills
+              </p>
+            </div>
+          </div>
+
+          <span className={`font-mono text-xs font-semibold ${verdictColor}`}>
+            {verdictLabel}
+          </span>
+        </div>
+
+        <div className="pt-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div className="lg:col-span-7 space-y-5">
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <label htmlFor="sim-buffer" className="font-medium text-zinc-700">
+                  Current checking balance
+                </label>
+                <span className="font-mono font-semibold text-zinc-950 tabular-nums">
+                  ${checkingBuffer.toLocaleString('en-US')}
+                </span>
+              </div>
+              <input
+                id="sim-buffer"
+                type="range"
+                min={500}
+                max={6000}
+                step={50}
+                value={checkingBuffer}
+                onChange={(e) => onChangeCheckingBuffer(Number(e.target.value))}
+                className="w-full accent-emerald-700 cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <label htmlFor="sim-purchase" className="font-medium text-zinc-700">
+                  Planned one-time purchase (flight, laptop, event)
+                </label>
+                <span className="font-mono font-semibold text-zinc-950 tabular-nums">
+                  ${plannedPurchase.toLocaleString('en-US')}
+                </span>
+              </div>
+              <input
+                id="sim-purchase"
+                type="range"
+                min={0}
+                max={2000}
+                step={25}
+                value={plannedPurchase}
+                onChange={(e) => setPlannedPurchase(Number(e.target.value))}
+                className="w-full accent-zinc-900 cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <label htmlFor="sim-dining" className="font-medium text-zinc-700">
+                  Monthly Dining reduction target
+                </label>
+                <span className="font-mono font-semibold text-emerald-800 tabular-nums">
+                  -{diningTrimPct}% (+${(diningSavingsPerMonth * 3).toFixed(0)} over 90d)
+                </span>
+              </div>
+              <input
+                id="sim-dining"
+                type="range"
+                min={0}
+                max={50}
+                step={5}
+                value={diningTrimPct}
+                onChange={(e) => setDiningTrimPct(Number(e.target.value))}
+                className="w-full accent-emerald-700 cursor-pointer"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-xs text-zinc-600">
+                Include group settlements owed to you (+${netYouAreOwed.toFixed(2)})
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={collectGroupOwed}
+                onClick={() => setCollectGroupOwed((p) => !p)}
+                className={`px-3 py-1 text-xs font-mono font-semibold rounded-md cursor-pointer ${
+                  collectGroupOwed
+                    ? 'bg-emerald-800 text-white'
+                    : 'bg-zinc-200 text-zinc-700'
+                }`}
+              >
+                {collectGroupOwed ? 'INCLUDED' : 'EXCLUDED'}
+              </button>
+            </div>
+          </div>
+
+          <div className="lg:col-span-5 bg-[#FAFAFA] border border-zinc-200 rounded-xl p-5 space-y-4">
+            <div className="pb-4 border-b border-zinc-200">
+              <p className="text-xs text-zinc-500">Projected Post-Bills Buffer</p>
+              <p
+                className={`mt-1 font-mono text-3xl font-semibold tabular-nums ${
+                  simulated90DayBuffer < 0 ? 'text-red-700' : 'text-zinc-950'
+                }`}
+              >
+                ${simulated90DayBuffer.toFixed(2)}
+              </p>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-600">Upcoming group recurring bills</span>
+                <span className="font-mono text-zinc-950 tabular-nums">
+                  -${activeGroupRecurring.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-600">Paused subscriptions saved (90d)</span>
+                <span className="font-mono text-emerald-800 tabular-nums">
+                  +${(pausedSavingsMonthly * 3).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-600">Simulated safe daily allowance</span>
+                <span className="font-mono font-semibold text-zinc-950 tabular-nums">
+                  ${safeDailyAllowance.toFixed(2)} / day
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left 7 Columns: 6-Month Spending / Savings / Shared Splits Chart */}
         <section className="lg:col-span-7 bg-white border border-zinc-200 rounded-xl p-6">

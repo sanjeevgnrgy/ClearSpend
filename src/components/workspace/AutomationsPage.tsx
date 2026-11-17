@@ -1,12 +1,14 @@
+'use client';
+
 import { useState, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Check, Plus, X } from 'lucide-react';
+import { Sparkles, Check, Plus, X, Mail, Copy } from 'lucide-react';
 import {
   AgentSuggestion,
   AutomationRule,
   ExpenseCategory,
   SplitGroup,
-} from '../../types/clearspend';
+} from '@/types/clearspend';
 
 interface AutomationsPageProps {
   suggestions: AgentSuggestion[];
@@ -37,8 +39,39 @@ export function AutomationsPage({
   const [targetGroupId, setTargetGroupId] = useState(groups[0]?.id ?? '');
   const [ruleError, setRuleError] = useState<string | null>(null);
 
+  // Email draft modal/composer state
+  const [activeDraftItem, setActiveDraftItem] = useState<AgentSuggestion | null>(null);
+  const [draftSubject, setDraftSubject] = useState('');
+  const [draftBody, setDraftBody] = useState('');
+  const [draftCopied, setDraftCopied] = useState(false);
+
   const pendingSuggestions = suggestions.filter((s) => s.status === 'pending');
   const resolvedSuggestions = suggestions.filter((s) => s.status !== 'pending');
+
+  function openEmailDraft(item: AgentSuggestion) {
+    setActiveDraftItem(item);
+    setDraftSubject(
+      item.draftEmailSubject ?? `Billing inquiry regarding ${item.title}`
+    );
+    setDraftBody(
+      item.draftEmailBody ??
+        `Hello Billing Support,\n\nI am writing regarding "${item.title}". ${item.description}\n\nPlease confirm resolution at your earliest convenience.\n\nThank you,\nAlex Rivera`
+    );
+    setDraftCopied(false);
+  }
+
+  async function handleCopyDraft() {
+    const fullText = `Subject: ${draftSubject}\n\n${draftBody}`;
+    await navigator.clipboard?.writeText(fullText);
+    setDraftCopied(true);
+    setTimeout(() => setDraftCopied(false), 2000);
+  }
+
+  function handleApplyDraftedResolution() {
+    if (!activeDraftItem) return;
+    onApplySuggestion(activeDraftItem.id);
+    setActiveDraftItem(null);
+  }
 
   function handleCreateRule(e: FormEvent) {
     e.preventDefault();
@@ -77,7 +110,7 @@ export function AutomationsPage({
                 Proactive Agent Queue
               </h2>
               <p className="text-xs text-zinc-500">
-                Detected anomalies, renewal hikes, and recurring split opportunities awaiting your approval
+                Detected anomalies, renewal hikes, refund drafts, and recurring split opportunities awaiting your approval
               </p>
             </div>
           </div>
@@ -100,49 +133,68 @@ export function AutomationsPage({
         ) : (
           <ul className="divide-y divide-zinc-100">
             <AnimatePresence initial={false}>
-              {pendingSuggestions.map((item) => (
-                <motion.li
-                  key={item.id}
-                  layout
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.2, ease: EASE_OUT_EXPO }}
-                  className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 hover:bg-zinc-50/70 transition-colors"
-                >
-                  <div className="max-w-2xl">
-                    <p className="text-xs font-mono font-medium text-emerald-800 mb-1">
-                      {item.impactLabel}
-                    </p>
-                    <h3 className="text-sm font-semibold text-zinc-950">
-                      {item.title}
-                    </h3>
-                    <p className="mt-1 text-sm text-zinc-600 leading-relaxed">
-                      {item.description}
-                    </p>
-                  </div>
+              {pendingSuggestions.map((item) => {
+                const hasEmailDraft =
+                  Boolean(item.draftEmailBody) ||
+                  item.type === 'duplicate' ||
+                  item.type === 'price_hike';
 
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => onDismissSuggestion(item.id)}
-                      aria-label={`Dismiss ${item.title}`}
-                      className="inline-flex items-center gap-1 px-3.5 py-2 text-xs font-medium text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Dismiss</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onApplySuggestion(item.id)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-zinc-900 hover:bg-emerald-800 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
-                    >
-                      <Check className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>{item.actionLabel}</span>
-                    </button>
-                  </div>
-                </motion.li>
-              ))}
+                return (
+                  <motion.li
+                    key={item.id}
+                    layout
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.2, ease: EASE_OUT_EXPO }}
+                    className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 hover:bg-zinc-50/70 transition-colors"
+                  >
+                    <div className="max-w-2xl">
+                      <p className="text-xs font-mono font-medium text-emerald-800 mb-1">
+                        {item.impactLabel}
+                      </p>
+                      <h3 className="text-sm font-semibold text-zinc-950">
+                        {item.title}
+                      </h3>
+                      <p className="mt-1 text-sm text-zinc-600 leading-relaxed">
+                        {item.description}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onDismissSuggestion(item.id)}
+                        aria-label={`Dismiss ${item.title}`}
+                        className="inline-flex items-center gap-1 px-3.5 py-2 text-xs font-medium text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Dismiss</span>
+                      </button>
+
+                      {hasEmailDraft ? (
+                        <button
+                          type="button"
+                          onClick={() => openEmailDraft(item)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-zinc-900 hover:bg-emerald-800 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                        >
+                          <Mail className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>{item.actionLabel}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onApplySuggestion(item.id)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-zinc-900 hover:bg-emerald-800 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>{item.actionLabel}</span>
+                        </button>
+                      )}
+                    </div>
+                  </motion.li>
+                );
+              })}
             </AnimatePresence>
           </ul>
         )}
@@ -150,11 +202,123 @@ export function AutomationsPage({
         {resolvedSuggestions.length > 0 && (
           <div className="px-6 py-3 bg-[#FAFAFA] border-t border-zinc-200 text-xs text-zinc-500 flex flex-wrap items-center justify-between gap-2">
             <span>
-              Recently handled: {resolvedSuggestions.map((s) => `${s.title} (${s.status})`).join(' · ')}
+              Recently handled:{' '}
+              {resolvedSuggestions.map((s) => `${s.title} (${s.status})`).join(' · ')}
             </span>
           </div>
         )}
       </section>
+
+      {/* Agentic Refund / Cancellation Draft Editor Modal */}
+      <AnimatePresence>
+        {activeDraftItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setActiveDraftItem(null)}
+              className="fixed inset-0 bg-zinc-950/35 backdrop-blur-[1px]"
+            />
+            <motion.div
+              role="dialog"
+              aria-label="Agentic Email Draft"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 12 }}
+              transition={{ duration: 0.2, ease: EASE_OUT_EXPO }}
+              className="relative z-10 w-full max-w-xl bg-white border border-zinc-200 rounded-xl shadow-xl overflow-hidden"
+            >
+              <div className="px-6 py-4 border-b border-zinc-200 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Mail className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
+                  <h3 className="font-display text-base font-semibold text-zinc-950 truncate">
+                    Agentic Refund & Cancellation Draft
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close email draft"
+                  onClick={() => setActiveDraftItem(null)}
+                  className="p-1.5 text-zinc-500 hover:text-zinc-950 rounded-md cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label
+                    htmlFor="draft-subject"
+                    className="block text-xs font-medium text-zinc-700 mb-1"
+                  >
+                    Subject line
+                  </label>
+                  <input
+                    id="draft-subject"
+                    type="text"
+                    value={draftSubject}
+                    onChange={(e) => setDraftSubject(e.target.value)}
+                    className="w-full h-10 px-3 text-sm bg-[#FAFAFA] border border-zinc-200 rounded-lg focus:outline-none focus:border-emerald-700"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="draft-body"
+                    className="block text-xs font-medium text-zinc-700 mb-1"
+                  >
+                    Message body
+                  </label>
+                  <textarea
+                    id="draft-body"
+                    rows={7}
+                    value={draftBody}
+                    onChange={(e) => setDraftBody(e.target.value)}
+                    className="w-full p-3 text-sm bg-[#FAFAFA] border border-zinc-200 rounded-lg leading-relaxed focus:outline-none focus:border-emerald-700"
+                  />
+                </div>
+              </div>
+
+              <div className="px-6 py-4 bg-[#FAFAFA] border-t border-zinc-200 flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => void handleCopyDraft()}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-zinc-800 bg-white border border-zinc-200 hover:border-zinc-400 rounded-lg cursor-pointer"
+                >
+                  {draftCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
+                      <span>Copied Draft</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Copy Subject & Body</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="flex items-center gap-2.5">
+                  <a
+                    href={`mailto:?subject=${encodeURIComponent(draftSubject)}&body=${encodeURIComponent(draftBody)}`}
+                    className="px-3.5 py-2 text-xs font-medium text-zinc-700 bg-zinc-200/70 hover:bg-zinc-200 rounded-lg"
+                  >
+                    Open in Mail App
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleApplyDraftedResolution}
+                    className="px-4 py-2 text-xs font-medium text-white bg-emerald-800 hover:bg-emerald-900 rounded-lg cursor-pointer"
+                  >
+                    Mark Resolved
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Smart Automation Rules */}
       <section className="bg-white border border-zinc-200 rounded-xl overflow-hidden">
@@ -178,7 +342,6 @@ export function AutomationsPage({
           </button>
         </div>
 
-        {/* Rule Builder Form */}
         <AnimatePresence>
           {showNewRule && (
             <motion.form

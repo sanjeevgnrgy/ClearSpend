@@ -1,3 +1,5 @@
+'use client';
+
 import { motion } from 'motion/react';
 import { Lock, ShieldCheck, FileSpreadsheet } from 'lucide-react';
 import { ResilientImage } from './ResilientImage';
@@ -68,7 +70,7 @@ export function ProofAndSecurity() {
               className="lg:col-span-7 overflow-hidden rounded-xl border border-zinc-200 min-h-[280px]"
             >
               <ResilientImage
-                src="/src/assets/images/team_finance_review_1794898288808.jpg"
+                src="/images/team_finance_review_1794898288808.jpg"
                 alt="Two team leads reviewing quarterly expense reports on a laptop at an oak table"
                 fallbackTitle="Team expense review"
                 className="w-full h-full object-cover"
@@ -119,7 +121,7 @@ export function ProofAndSecurity() {
               className="lg:col-span-5 overflow-hidden rounded-xl border border-zinc-200 min-h-[260px]"
             >
               <ResilientImage
-                src="/src/assets/images/security_vault_minimal_1794898288233.jpg"
+                src="/images/security_vault_minimal_1794898288233.jpg"
                 alt="Precision brushed aluminum and frosted glass blocks symbolizing encrypted ledger security"
                 fallbackTitle="Bank-grade security architecture"
                 className="w-full h-full object-cover"

@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Plus, Sparkles } from 'lucide-react';
@@ -5,8 +7,8 @@ import {
   INITIAL_HERO_PERSONAL,
   LedgerEntry,
   ExpenseCategory,
-} from '../data/expenseData';
-import { AppPage } from '../types/clearspend';
+} from '@/data/expenseData';
+import { AppPage } from '@/types/clearspend';
 
 interface HeroSectionProps {
   onOpenWorkspace: (page?: AppPage) => void;

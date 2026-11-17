@@ -6,7 +6,12 @@ export type ExpenseCategory =
   | 'Utilities'
   | 'Housing';
 
-export type SplitMethod = 'equal' | 'exact' | 'percentage' | 'shares';
+export type SplitMethod =
+  | 'equal'
+  | 'exact'
+  | 'percentage'
+  | 'shares'
+  | 'itemized';
 
 export type AppPage =
   | 'overview'
@@ -15,11 +20,21 @@ export type AppPage =
   | 'analytics'
   | 'receipts';
 
+export type TransactionSource =
+  | 'Manual'
+  | 'Receipt OCR'
+  | 'Agentic Rule'
+  | 'Bank Feed'
+  | 'Group Split'
+  | 'CSV Import'
+  | 'Voice';
+
 export interface GroupMember {
   id: string;
   name: string;
   initials: string;
   email: string;
+  defaultWeight: number;
   isSelf?: boolean;
 }
 
@@ -41,12 +56,24 @@ export interface SharedExpense {
   isSettlement?: boolean;
 }
 
+export interface RecurringGroupBill {
+  id: string;
+  groupId: string;
+  title: string;
+  category: ExpenseCategory;
+  amount: number;
+  dayOfMonth: number;
+  active: boolean;
+}
+
 export interface SplitGroup {
   id: string;
   name: string;
   description: string;
   currency: string;
+  fairnessLabel: string;
   memberIds: string[];
+  shareId?: string;
 }
 
 export interface LedgerTransaction {
@@ -56,18 +83,20 @@ export interface LedgerTransaction {
   date: string;
   amount: number;
   note: string;
-  source: 'Manual' | 'Receipt OCR' | 'Agentic Rule' | 'Bank Feed' | 'Group Split';
+  source: TransactionSource;
   groupId?: string;
 }
 
 export interface AgentSuggestion {
   id: string;
-  type: 'duplicate' | 'price_hike' | 'auto_split' | 'settlement';
+  type: 'duplicate' | 'price_hike' | 'auto_split' | 'settlement' | 'collision';
   title: string;
   description: string;
   impactLabel: string;
   actionLabel: string;
   status: 'pending' | 'applied' | 'dismissed';
+  draftEmailSubject?: string;
+  draftEmailBody?: string;
   payload?: {
     merchant?: string;
     category?: ExpenseCategory;
@@ -85,6 +114,11 @@ export interface AutomationRule {
   enabled: boolean;
 }
 
+export interface ReceiptLineItem {
+  name: string;
+  price: number;
+}
+
 export interface ReceiptDocument {
   id: string;
   merchant: string;
@@ -95,8 +129,8 @@ export interface ReceiptDocument {
   total: number;
   category: ExpenseCategory;
   paymentMethod: string;
-  items: { name: string; price: number }[];
-  assignedTarget: 'unassigned' | 'personal' | string; // groupId if assigned to group
+  items: ReceiptLineItem[];
+  assignedTarget: 'unassigned' | 'personal' | string;
 }
 
 export interface SubscriptionItem {
@@ -107,4 +141,15 @@ export interface SubscriptionItem {
   monthlyCost: number;
   previousCost?: number;
   status: 'Active' | 'Price Increased' | 'Paused';
+}
+
+export interface PublicShareSnapshot {
+  ownerId: string;
+  groupId: string;
+  groupName: string;
+  description: string;
+  currency: string;
+  totalGroupSpend: number;
+  transfers: { from: string; to: string; amount: number }[];
+  expenses: { title: string; paidBy: string; amount: number; date: string }[];
 }

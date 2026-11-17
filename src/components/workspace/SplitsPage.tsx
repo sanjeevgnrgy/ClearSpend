@@ -1,24 +1,39 @@
+'use client';
+
 import { useState, FormEvent } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
+import {
+  Plus,
+  ArrowRight,
+  CheckCircle2,
+  Sparkles,
+  Share2,
+  Copy,
+  Check,
+  Repeat,
+  ExternalLink,
+} from 'lucide-react';
 import {
   ExpenseCategory,
   GroupMember,
+  RecurringGroupBill,
   SharedExpense,
   SplitAllocation,
   SplitGroup,
   SplitMethod,
-} from '../../types/clearspend';
+} from '@/types/clearspend';
 import {
   buildEqualAllocations,
   calculateGroupBalances,
   simplifyGroupDebts,
-} from '../../utils/splitMath';
+} from '@/utils/splitMath';
 
 interface SplitsPageProps {
   groups: SplitGroup[];
   members: GroupMember[];
   sharedExpenses: SharedExpense[];
+  recurringBills: RecurringGroupBill[];
   onAddSharedExpense: (expense: Omit<SharedExpense, 'id'>) => void;
   onSettleTransfer: (
     groupId: string,
@@ -26,23 +41,47 @@ interface SplitsPageProps {
     toMemberId: string,
     amount: number
   ) => void;
-  onCreateGroup: (name: string, description: string, memberIds: string[]) => void;
+  onCreateGroup: (
+    name: string,
+    description: string,
+    fairnessLabel: string,
+    memberIds: string[]
+  ) => void;
+  onPostRecurringBill: (billId: string) => void;
+  onToggleRecurringBill: (billId: string) => void;
+  onPublishShareLink: (groupId: string) => Promise<string>;
 }
 
 const EASE_OUT_EXPO = [0.16, 1, 0.3, 1] as const;
+
+const FAIRNESS_PRESETS = [
+  'Equal split',
+  '60/40 Household Preset',
+  '65/35 Couple Income Preset',
+  '70/30 Roommate Preset',
+];
 
 export function SplitsPage({
   groups,
   members,
   sharedExpenses,
+  recurringBills,
   onAddSharedExpense,
   onSettleTransfer,
   onCreateGroup,
+  onPostRecurringBill,
+  onToggleRecurringBill,
+  onPublishShareLink,
 }: SplitsPageProps) {
   const [selectedGroupId, setSelectedGroupId] = useState(groups[0]?.id ?? '');
   const [simplifyEnabled, setSimplifyEnabled] = useState(true);
   const [showAddSplit, setShowAddSplit] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+
+  // Share link state
+  const [publishedShareUrl, setPublishedShareUrl] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [publishingShare, setPublishingShare] = useState(false);
 
   // Add Shared Expense Form
   const [title, setTitle] = useState('');
@@ -56,6 +95,7 @@ export function SplitsPage({
   // Create Group Form
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
+  const [newGroupFairness, setNewGroupFairness] = useState(FAIRNESS_PRESETS[0]);
   const [selectedNewMembers, setSelectedNewMembers] = useState<string[]>([
     'm-you',
     'm-maya',
@@ -68,14 +108,48 @@ export function SplitsPage({
     .map((id) => members.find((m) => m.id === id))
     .filter((m): m is GroupMember => Boolean(m));
 
+  const groupRecurringBills = recurringBills.filter(
+    (b) => b.groupId === activeGroup.id || activeGroup.id.startsWith(b.groupId)
+  );
+
   const balances = calculateGroupBalances(activeGroup.memberIds, groupExpenses);
   const simplifiedTransfers = simplifyGroupDebts(balances);
-
-  // Unsimplified direct transfers (pairwise by expense) for comparison when toggle is off
-  const rawPairwiseCount = groupExpenses.filter((e) => !e.isSettlement).length * (groupMembers.length - 1);
+  const rawPairwiseCount =
+    groupExpenses.filter((e) => !e.isSettlement).length *
+    Math.max(groupMembers.length - 1, 1);
 
   function getMember(id: string) {
     return members.find((m) => m.id === id);
+  }
+
+  function applyCoupleFairnessPreset(pctFirst: number) {
+    if (groupMembers.length < 2) return;
+    setSplitMethod('percentage');
+    const rest = Math.round(((100 - pctFirst) / (groupMembers.length - 1)) * 10) / 10;
+    const next: Record<string, string> = {};
+    groupMembers.forEach((m, idx) => {
+      next[m.id] = idx === 0 ? String(pctFirst) : String(rest);
+    });
+    setCustomInputs(next);
+  }
+
+  async function handlePublishShare() {
+    setPublishingShare(true);
+    setShareCopied(false);
+    try {
+      const url = await onPublishShareLink(activeGroup.id);
+      setPublishedShareUrl(url);
+    } finally {
+      setPublishingShare(false);
+    }
+  }
+
+  async function handleCopyShareUrl() {
+    if (!publishedShareUrl || typeof window === 'undefined') return;
+    const fullUrl = `${window.location.origin}${publishedShareUrl}`;
+    await navigator.clipboard?.writeText(fullUrl);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
   }
 
   function handleSplitSubmit(e: FormEvent) {
@@ -121,8 +195,10 @@ export function SplitsPage({
           amount: Math.round(((parsedTotal * safePct) / 100) * 100) / 100,
         };
       });
-      if (Math.abs(pctSum - 100) > 0.1) {
-        setSplitError(`Percentages currently total ${pctSum.toFixed(1)}% (must equal 100%).`);
+      if (Math.abs(pctSum - 100) > 0.2) {
+        setSplitError(
+          `Percentages currently total ${pctSum.toFixed(1)}% (must equal 100%).`
+        );
         return;
       }
     } else if (splitMethod === 'shares') {
@@ -150,7 +226,7 @@ export function SplitsPage({
       paidByMemberId: paidBy,
       splitMethod,
       allocations,
-      date: 'Nov 16',
+      date: 'Nov 17',
     });
 
     setTitle('');
@@ -173,6 +249,7 @@ export function SplitsPage({
     onCreateGroup(
       newGroupName.trim(),
       newGroupDesc.trim() || 'Shared group expenses',
+      newGroupFairness,
       selectedNewMembers
     );
     setNewGroupName('');
@@ -181,7 +258,7 @@ export function SplitsPage({
   }
 
   function toggleNewGroupMember(id: string) {
-    if (id === 'm-you') return; // always include self
+    if (id === 'm-you') return;
     setSelectedNewMembers((prev) =>
       prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]
     );
@@ -198,7 +275,10 @@ export function SplitsPage({
               <button
                 key={grp.id}
                 type="button"
-                onClick={() => setSelectedGroupId(grp.id)}
+                onClick={() => {
+                  setSelectedGroupId(grp.id);
+                  setPublishedShareUrl(null);
+                }}
                 className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors whitespace-nowrap cursor-pointer ${
                   isSelected
                     ? 'bg-zinc-900 text-white border-zinc-900'
@@ -219,15 +299,74 @@ export function SplitsPage({
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowAddSplit((prev) => !prev)}
-          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-emerald-800 hover:bg-emerald-900 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
-        >
-          <Plus className="w-4 h-4" aria-hidden="true" />
-          <span>{showAddSplit ? 'Cancel Split' : 'Add Shared Expense'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            disabled={publishingShare}
+            onClick={() => void handlePublishShare()}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-zinc-800 bg-white border border-zinc-200 hover:border-zinc-400 rounded-lg transition-colors whitespace-nowrap cursor-pointer disabled:opacity-60"
+          >
+            <Share2 className="w-4 h-4 text-emerald-700" aria-hidden="true" />
+            <span>{publishingShare ? 'Publishing...' : 'Share Settlement Link'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowAddSplit((prev) => !prev)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-emerald-800 hover:bg-emerald-900 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+          >
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            <span>{showAddSplit ? 'Cancel Split' : 'Add Shared Expense'}</span>
+          </button>
+        </div>
       </div>
+
+      {/* Published No-Login Share Link Banner */}
+      <AnimatePresence>
+        {publishedShareUrl && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4"
+          >
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-emerald-950">
+                No-login settlement link ready for {activeGroup.name}
+              </p>
+              <p className="font-mono text-xs text-emerald-800 truncate mt-0.5">
+                {publishedShareUrl}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => void handleCopyShareUrl()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-900 bg-white border border-zinc-200 hover:border-zinc-400 rounded-lg cursor-pointer"
+              >
+                {shareCopied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
+                    <span>Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Copy Link</span>
+                  </>
+                )}
+              </button>
+              <Link
+                href={publishedShareUrl}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-zinc-900 hover:bg-emerald-800 rounded-lg"
+              >
+                <span>Open Public View</span>
+                <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+              </Link>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Create Group Inline Form */}
       <AnimatePresence>
@@ -244,7 +383,7 @@ export function SplitsPage({
             <h2 className="font-display text-lg font-semibold text-zinc-950">
               Create Shared Group
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label htmlFor="grp-name" className="block text-xs font-medium text-zinc-700 mb-1">
                   Group name
@@ -270,6 +409,23 @@ export function SplitsPage({
                   placeholder="Cabin, lift tickets, and groceries"
                   className="w-full h-10 px-3 text-sm bg-[#FAFAFA] border border-zinc-200 rounded-lg focus:outline-none focus:border-emerald-700"
                 />
+              </div>
+              <div>
+                <label htmlFor="grp-fairness" className="block text-xs font-medium text-zinc-700 mb-1">
+                  Fairness Preset
+                </label>
+                <select
+                  id="grp-fairness"
+                  value={newGroupFairness}
+                  onChange={(e) => setNewGroupFairness(e.target.value)}
+                  className="w-full h-10 px-2.5 text-sm bg-[#FAFAFA] border border-zinc-200 rounded-lg focus:outline-none focus:border-emerald-700"
+                >
+                  {FAIRNESS_PRESETS.map((preset) => (
+                    <option key={preset} value={preset}>
+                      {preset}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -321,7 +477,7 @@ export function SplitsPage({
         )}
       </AnimatePresence>
 
-      {/* Add Shared Expense Composer (Equal / Exact / % / Shares) */}
+      {/* Add Shared Expense Composer (Equal / Exact / % / Shares + Fairness Presets) */}
       <AnimatePresence>
         {showAddSplit && (
           <motion.form
@@ -339,35 +495,51 @@ export function SplitsPage({
                   Add Shared Expense to {activeGroup.name}
                 </h2>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  Choose Equal, Exact Dollar, Percentage, or Share weighting
+                  Choose Equal, Exact Dollar, Percentage, Share weighting, or Couple/Roommate Fairness Presets
                 </p>
               </div>
 
-              <div className="flex items-center gap-1 p-1 bg-zinc-100 rounded-lg">
-                {(
-                  [
-                    { id: 'equal', label: 'Equal' },
-                    { id: 'exact', label: 'Exact ($)' },
-                    { id: 'percentage', label: 'Percent (%)' },
-                    { id: 'shares', label: 'Shares (×)' },
-                  ] as { id: SplitMethod; label: string }[]
-                ).map((mode) => (
-                  <button
-                    key={mode.id}
-                    type="button"
-                    onClick={() => {
-                      setSplitMethod(mode.id);
-                      setSplitError(null);
-                    }}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-                      splitMethod === mode.id
-                        ? 'bg-white text-zinc-950 shadow-xs'
-                        : 'text-zinc-600 hover:text-zinc-900'
-                    }`}
-                  >
-                    {mode.label}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyCoupleFairnessPreset(60)}
+                  className="px-2.5 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-md cursor-pointer"
+                >
+                  60/40 Preset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyCoupleFairnessPreset(65)}
+                  className="px-2.5 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-md cursor-pointer"
+                >
+                  65/35 Preset
+                </button>
+                <div className="flex items-center gap-1 p-1 bg-zinc-100 rounded-lg">
+                  {(
+                    [
+                      { id: 'equal', label: 'Equal' },
+                      { id: 'exact', label: 'Exact ($)' },
+                      { id: 'percentage', label: 'Percent (%)' },
+                      { id: 'shares', label: 'Shares (×)' },
+                    ] as { id: SplitMethod; label: string }[]
+                  ).map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => {
+                        setSplitMethod(mode.id);
+                        setSplitError(null);
+                      }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
+                        splitMethod === mode.id
+                          ? 'bg-white text-zinc-950 shadow-xs'
+                          : 'text-zinc-600 hover:text-zinc-900'
+                      }`}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -516,19 +688,22 @@ export function SplitsPage({
         )}
       </AnimatePresence>
 
-      {/* Main Splitwise-style Group View: Left Balances & Settlements, Right Group Activity */}
+      {/* Main Splitwise-style Group View */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left 5 Columns: Member Balances + Debt Simplification */}
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white border border-zinc-200 rounded-xl p-6">
             <div className="pb-4 border-b border-zinc-100">
               <h2 className="font-display text-lg font-semibold text-zinc-950">
                 {activeGroup.name}
               </h2>
-              <p className="text-xs text-zinc-500 mt-0.5">{activeGroup.description}</p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                {activeGroup.description} <span aria-hidden="true">·</span>{' '}
+                <span className="text-emerald-800 font-medium">
+                  {activeGroup.fairnessLabel}
+                </span>
+              </p>
             </div>
 
-            {/* Member Net Balances */}
             <div className="py-4 divide-y divide-zinc-100">
               {balances.map((b) => {
                 const member = getMember(b.memberId);
@@ -580,7 +755,7 @@ export function SplitsPage({
             </div>
           </div>
 
-          {/* Smart Debt Simplification & Settle Up Card */}
+          {/* Suggested Settlements */}
           <div className="bg-white border border-zinc-200 rounded-xl p-6">
             <div className="flex items-center justify-between gap-3 pb-4 border-b border-zinc-100">
               <div className="flex items-center gap-2">
@@ -669,6 +844,62 @@ export function SplitsPage({
                     );
                   })}
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Recurring Group Bills */}
+          <div className="bg-white border border-zinc-200 rounded-xl p-6">
+            <div className="flex items-center gap-2 pb-4 border-b border-zinc-100">
+              <Repeat className="w-4 h-4 text-emerald-700" aria-hidden="true" />
+              <div>
+                <h3 className="font-display text-base font-semibold text-zinc-950">
+                  Recurring Auto-Posting Bills
+                </h3>
+                <p className="text-xs text-zinc-500">
+                  Rent & utilities split automatically using your group fairness preset
+                </p>
+              </div>
+            </div>
+
+            {groupRecurringBills.length === 0 ? (
+              <p className="pt-4 text-xs text-zinc-500">
+                No recurring bills scheduled for {activeGroup.name}. Switch to Apartment 4B to view recurring rent & fiber.
+              </p>
+            ) : (
+              <div className="divide-y divide-zinc-100 pt-2">
+                {groupRecurringBills.map((bill) => (
+                  <div
+                    key={bill.id}
+                    className="py-3 flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-zinc-950 truncate">
+                        {bill.title}
+                      </p>
+                      <p className="text-xs text-zinc-500 font-mono tabular-nums">
+                        ${bill.amount.toFixed(2)} · Day {bill.dayOfMonth} ·{' '}
+                        {bill.active ? 'Auto-active' : 'Paused'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onToggleRecurringBill(bill.id)}
+                        className="px-2.5 py-1 text-xs font-medium text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-md cursor-pointer"
+                      >
+                        {bill.active ? 'Pause' : 'Enable'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onPostRecurringBill(bill.id)}
+                        className="px-2.5 py-1 text-xs font-medium text-white bg-zinc-900 hover:bg-emerald-800 rounded-md cursor-pointer"
+                      >
+                        Post Cycle Now
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

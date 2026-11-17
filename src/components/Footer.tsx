@@ -1,4 +1,6 @@
-import { AppPage } from '../types/clearspend';
+'use client';
+
+import { AppPage } from '@/types/clearspend';
 
 interface FooterProps {
   onOpenWorkspace: (page: AppPage) => void;

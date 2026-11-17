@@ -4,16 +4,17 @@ import {
   GroupMember,
   LedgerTransaction,
   ReceiptDocument,
+  RecurringGroupBill,
   SharedExpense,
   SplitGroup,
   SubscriptionItem,
 } from '../types/clearspend';
 
 export const GROUP_MEMBERS: GroupMember[] = [
-  { id: 'm-you', name: 'You (Alex)', initials: 'AL', email: 'alex@clearspend.app', isSelf: true },
-  { id: 'm-maya', name: 'Maya Lin', initials: 'ML', email: 'maya@studio.co' },
-  { id: 'm-liam', name: 'Liam Chen', initials: 'LC', email: 'liam@northstar.io' },
-  { id: 'm-samira', name: 'Samira Patel', initials: 'SP', email: 'samira@oakridge.com' },
+  { id: 'm-you', name: 'You (Alex)', initials: 'AL', email: 'alex@clearspend.app', defaultWeight: 50, isSelf: true },
+  { id: 'm-maya', name: 'Maya Lin', initials: 'ML', email: 'maya@studio.co', defaultWeight: 50 },
+  { id: 'm-liam', name: 'Liam Chen', initials: 'LC', email: 'liam@northstar.io', defaultWeight: 50 },
+  { id: 'm-samira', name: 'Samira Patel', initials: 'SP', email: 'samira@oakridge.com', defaultWeight: 50 },
 ];
 
 export const INITIAL_SPLIT_GROUPS: SplitGroup[] = [
@@ -22,21 +23,48 @@ export const INITIAL_SPLIT_GROUPS: SplitGroup[] = [
     name: 'Lisbon Trip',
     description: 'Flights, stays, and shared dinners · Nov 8–14',
     currency: 'USD',
+    fairnessLabel: 'Equal (25% each)',
     memberIds: ['m-you', 'm-maya', 'm-liam', 'm-samira'],
+    shareId: 'lisbon-nov-2026',
   },
   {
     id: 'grp-apt',
     name: 'Apartment 4B',
     description: 'Monthly rent, utilities, and household staples',
     currency: 'USD',
+    fairnessLabel: '60/40 Fairness Preset',
     memberIds: ['m-you', 'm-maya'],
+    shareId: 'apartment-4b-nov',
   },
   {
     id: 'grp-offsite',
     name: 'Design Offsite',
     description: 'Team travel, coworking passes, and client meals',
     currency: 'USD',
+    fairnessLabel: 'Equal (33% each)',
     memberIds: ['m-you', 'm-liam', 'm-samira'],
+    shareId: 'design-offsite-q4',
+  },
+];
+
+export const INITIAL_RECURRING_BILLS: RecurringGroupBill[] = [
+  {
+    id: 'rb-1',
+    groupId: 'grp-apt',
+    title: 'Apartment 4B Monthly Rent',
+    category: 'Housing',
+    amount: 2400.0,
+    dayOfMonth: 1,
+    active: true,
+  },
+  {
+    id: 'rb-2',
+    groupId: 'grp-apt',
+    title: 'Sonic Fiber Gigabit Internet',
+    category: 'Utilities',
+    amount: 70.0,
+    dayOfMonth: 15,
+    active: true,
   },
 ];
 
@@ -92,14 +120,14 @@ export const INITIAL_SHARED_EXPENSES: SharedExpense[] = [
   {
     id: 'se-4',
     groupId: 'grp-apt',
-    title: 'ConEd Electric & Gas',
+    title: 'ConEd Electric & Gas (60/40 preset)',
     category: 'Utilities',
-    totalAmount: 148.4,
+    totalAmount: 150.0,
     paidByMemberId: 'm-you',
-    splitMethod: 'equal',
+    splitMethod: 'percentage',
     allocations: [
-      { memberId: 'm-you', amount: 74.2 },
-      { memberId: 'm-maya', amount: 74.2 },
+      { memberId: 'm-you', amount: 90.0 },
+      { memberId: 'm-maya', amount: 60.0 },
     ],
     date: 'Nov 09',
   },
@@ -173,10 +201,10 @@ export const INITIAL_LEDGER_TRANSACTIONS: LedgerTransaction[] = [
   },
   {
     id: 'tx-5',
-    merchant: 'ConEd Electric & Gas (Your 50% share)',
+    merchant: 'ConEd Electric & Gas (Your 60% share)',
     category: 'Utilities',
     date: 'Nov 09',
-    amount: 74.2,
+    amount: 90.0,
     note: 'Split in Apartment 4B',
     source: 'Group Split',
     groupId: 'grp-apt',
@@ -214,12 +242,15 @@ export const INITIAL_AGENT_SUGGESTIONS: AgentSuggestion[] = [
   {
     id: 'ag-1',
     type: 'duplicate',
-    title: 'Potential duplicate SaaS charge detected',
+    title: 'Duplicate SaaS charge detected on Figma Organization',
     description:
-      'Figma Organization ($45.00) appeared twice within 36 hours on Virtual Card · 1102. One looks like a double authorization.',
-    impactLabel: 'Save $45.00',
-    actionLabel: 'Flag Duplicate',
+      'Figma Organization ($45.00) billed twice within 36 hours on Virtual Card · 1102. Ready to draft a refund request.',
+    impactLabel: 'Recover $45.00',
+    actionLabel: 'Draft Refund Email',
     status: 'pending',
+    draftEmailSubject: 'Refund request for duplicate charge ($45.00) on Nov 15',
+    draftEmailBody:
+      'Hello Figma Billing Support,\n\nI noticed two identical $45.00 charges for Figma Organization on Virtual Card ending in 1102 (Nov 14 and Nov 15). Could you please reverse the duplicate authorization and confirm via email?\n\nThank you,\nAlex Rivera',
     payload: { merchant: 'Figma Organization', amount: 45 },
   },
   {
@@ -227,7 +258,7 @@ export const INITIAL_AGENT_SUGGESTIONS: AgentSuggestion[] = [
     type: 'auto_split',
     title: 'Auto-split pattern found for Trader Joe’s',
     description:
-      'You split 4 of your last 5 Trader Joe’s receipts 50/50 with Maya Lin in Apartment 4B. Create a rule to split automatically?',
+      'You split 4 of your last 5 Trader Joe’s receipts with Maya Lin in Apartment 4B. Create an automatic split rule?',
     impactLabel: 'Saves ~4 min/week',
     actionLabel: 'Create Split Rule',
     status: 'pending',
@@ -236,21 +267,24 @@ export const INITIAL_AGENT_SUGGESTIONS: AgentSuggestion[] = [
   {
     id: 'ag-3',
     type: 'price_hike',
-    title: 'Subscription renewal price increased by 50%',
+    title: 'Notion Workspace renewal increased by 50%',
     description:
-      'Notion Workspace moved from $10.00/mo to $15.00/mo ahead of your Nov 24 renewal date.',
-    impactLabel: '+$60.00/yr impact',
-    actionLabel: 'Mark Reviewed',
+      'Notion Workspace moved from $10.00/mo to $15.00/mo ahead of your Nov 24 renewal. Ready to cancel or downgrade.',
+    impactLabel: 'Save $180.00/yr',
+    actionLabel: 'Draft Cancellation',
     status: 'pending',
+    draftEmailSubject: 'Request to downgrade / cancel Notion Workspace before Nov 24 renewal',
+    draftEmailBody:
+      'Hello Notion Support,\n\nAhead of our upcoming Nov 24 billing cycle, we saw the monthly plan increase from $10.00 to $15.00. Please cancel auto-renewal on our workspace or revert to the Personal Free tier before the charge posts.\n\nBest regards,\nAlex Rivera',
   },
   {
     id: 'ag-4',
     type: 'settlement',
-    title: 'Lisbon Trip can settle in 3 transfers instead of 6',
+    title: 'Lisbon Trip settles in 3 transfers instead of 6',
     description:
-      'Debt simplification is ready for Lisbon Trip. Liam, Maya, and Samira owe a combined net $411.00 to you.',
+      'Debt simplification is ready for Lisbon Trip. Liam, Maya, and Samira owe a combined net $411.00 to you — covering upcoming rent.',
     impactLabel: '3 fewer transfers',
-    actionLabel: 'Simplify Balances',
+    actionLabel: 'Open Splits',
     status: 'pending',
     payload: { groupId: 'grp-lisbon' },
   },
@@ -267,9 +301,9 @@ export const INITIAL_AUTOMATION_RULES: AutomationRule[] = [
   },
   {
     id: 'rule-2',
-    name: 'Split ConEd utility bills 50/50',
-    conditionText: 'Merchant contains ConEd or Fiber',
-    actionText: 'Split equally in Apartment 4B',
+    name: 'Split ConEd utility bills 60/40',
+    conditionText: 'Merchant contains ConEd or Sonic Fiber',
+    actionText: 'Split via Apartment 4B Fairness Preset',
     matchesThisMonth: 2,
     enabled: true,
   },
@@ -294,17 +328,19 @@ export const INITIAL_AUTOMATION_RULES: AutomationRule[] = [
 export const INITIAL_RECEIPTS: ReceiptDocument[] = [
   {
     id: 'rcpt-101',
-    merchant: 'Daily Grind Roasters',
-    date: 'Nov 16 · 08:42',
-    subtotal: 13.02,
-    tax: 1.18,
-    tip: 2.0,
-    total: 16.2,
+    merchant: 'Osteria Mozza Group Dinner',
+    date: 'Nov 16 · 20:18',
+    subtotal: 142.0,
+    tax: 12.78,
+    tip: 25.22,
+    total: 180.0,
     category: 'Dining',
     paymentMethod: 'Apple Pay · 4821',
     items: [
-      { name: 'Cortado Oat Milk × 2', price: 9.5 },
-      { name: 'Cardamom Bun', price: 3.52 },
+      { name: 'Burrata & Charred Bread', price: 24.0 },
+      { name: 'Wild King Salmon (Maya)', price: 42.0 },
+      { name: 'Tagliatelle Bolognese (Alex)', price: 32.0 },
+      { name: 'Barolo Bottle (Liam & Alex)', price: 44.0 },
     ],
     assignedTarget: 'unassigned',
   },
@@ -385,6 +421,13 @@ export const INITIAL_SUBSCRIPTIONS: SubscriptionItem[] = [
     status: 'Active',
   },
 ];
+
+export const SAMPLE_BANK_CSV = `Date,Merchant,Amount,Card
+2026-11-16,TRADER JOE S #104 SAN FRANCISCO,54.20,Sapphire 9014
+2026-11-15,CONED UTILITY AUTOPAY,142.00,Checking 4410
+2026-11-14,UBER *TRIP HELP.UBER.COM,28.40,Sapphire 9014
+2026-11-13,BLUE BOTTLE COFFEE CO,6.75,Apple Pay 4821
+2026-11-12,FIGMA *PRO PLAN,45.00,Virtual 1102`;
 
 export const CATEGORY_BUDGETS: { category: 'Groceries' | 'Dining' | 'Travel' | 'Software' | 'Utilities'; cap: number }[] = [
   { category: 'Groceries', cap: 450 },

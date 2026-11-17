@@ -1,3 +1,5 @@
+'use client';
+
 import { ReactNode, useState } from 'react';
 import {
   LayoutDashboard,
@@ -9,8 +11,12 @@ import {
   Menu,
   X,
   Plus,
+  LogIn,
+  LogOut,
+  Cloud,
 } from 'lucide-react';
-import { AppPage } from '../../types/clearspend';
+import { AppPage } from '@/types/clearspend';
+import { useClearspend } from '@/context/ClearspendProvider';
 
 interface WorkspaceLayoutProps {
   activePage: AppPage;
@@ -48,6 +54,38 @@ export function WorkspaceLayout({
   children,
 }: WorkspaceLayoutProps) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const { user, authReady, isCloudSynced, signIn, signOut } = useClearspend();
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  async function handleSignIn() {
+    setAuthError(null);
+    setAuthBusy(true);
+    try {
+      await signIn();
+    } catch (err: unknown) {
+      setAuthError(err instanceof Error ? err.message : 'Google sign-in failed.');
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleSignOut() {
+    setAuthError(null);
+    setAuthBusy(true);
+    try {
+      await signOut();
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  const displayName = user?.displayName || 'Alex Rivera';
+  const syncLabel = !authReady
+    ? 'Checking session...'
+    : isCloudSynced
+    ? 'Firestore Cloud Sync'
+    : 'Demo Mode · Local';
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] text-zinc-900 flex">
@@ -100,10 +138,46 @@ export function WorkspaceLayout({
         </nav>
 
         <div className="p-4 border-t border-zinc-200 space-y-3">
-          <div className="px-2 py-1">
-            <p className="text-xs font-medium text-zinc-900 truncate">Alex Rivera</p>
-            <p className="text-xs text-zinc-500 truncate">Pro & Teams · Trial</p>
+          <div className="px-2 py-1 space-y-1">
+            <p className="text-xs font-medium text-zinc-950 truncate">{displayName}</p>
+            <p
+              className={`text-xs flex items-center gap-1.5 truncate ${
+                isCloudSynced ? 'text-emerald-800 font-medium' : 'text-zinc-500'
+              }`}
+            >
+              <Cloud className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{syncLabel}</span>
+            </p>
           </div>
+
+          {authError && (
+            <p role="alert" className="px-2 text-[11px] text-red-700">
+              {authError}
+            </p>
+          )}
+
+          {isCloudSynced ? (
+            <button
+              type="button"
+              disabled={authBusy}
+              onClick={() => void handleSignOut()}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer disabled:opacity-60"
+            >
+              <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Sign out</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={authBusy}
+              onClick={() => void handleSignIn()}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-white bg-zinc-900 hover:bg-emerald-800 rounded-lg transition-colors cursor-pointer disabled:opacity-60"
+            >
+              <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{authBusy ? 'Signing in...' : 'Sign in with Google'}</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onExitToLanding}
@@ -167,7 +241,38 @@ export function WorkspaceLayout({
                 );
               })}
             </nav>
-            <div className="p-4 border-t border-zinc-200">
+            <div className="p-4 border-t border-zinc-200 space-y-2.5">
+              <div className="px-1 text-xs text-zinc-600">
+                <p className="font-medium text-zinc-950 truncate">{displayName}</p>
+                <p className={isCloudSynced ? 'text-emerald-800' : 'text-zinc-500'}>
+                  {syncLabel}
+                </p>
+              </div>
+              {isCloudSynced ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileSidebarOpen(false);
+                    void handleSignOut();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-zinc-700 bg-zinc-100 rounded-lg cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Sign out</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileSidebarOpen(false);
+                    void handleSignIn();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-white bg-zinc-900 rounded-lg cursor-pointer"
+                >
+                  <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Sign in with Google</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -186,7 +291,6 @@ export function WorkspaceLayout({
 
       {/* Main Content Shell */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Top Header Contract: Breadcrumb on left, 1–2 primary actions on right */}
         <header className="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-md border-b border-zinc-200 px-4 sm:px-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -199,7 +303,9 @@ export function WorkspaceLayout({
             </button>
             <div className="flex items-center gap-2 text-sm truncate">
               <span className="text-zinc-400 hidden sm:inline">Clearspend</span>
-              <span className="text-zinc-300 hidden sm:inline" aria-hidden="true">/</span>
+              <span className="text-zinc-300 hidden sm:inline" aria-hidden="true">
+                /
+              </span>
               <h1 className="font-display font-semibold text-zinc-950 truncate">
                 {PAGE_TITLES[activePage]}
               </h1>

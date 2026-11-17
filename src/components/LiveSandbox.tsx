@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Trash2, RotateCcw, Search, ArrowRight } from 'lucide-react';
@@ -5,8 +7,8 @@ import {
   SANDBOX_INITIAL_EXPENSES,
   LedgerEntry,
   ExpenseCategory,
-} from '../data/expenseData';
-import { AppPage } from '../types/clearspend';
+} from '@/data/expenseData';
+import { AppPage } from '@/types/clearspend';
 
 interface LiveSandboxProps {
   onOpenWorkspace: (page?: AppPage) => void;

@@ -1,6 +1,6 @@
 {
   "name": "Clearspend — Real-Time Expense Tracker",
   "description": "Animated landing page and interactive expense ledger sandbox for Clearspend, a personal and team expense tracking platform.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
